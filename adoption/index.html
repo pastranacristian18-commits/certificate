@@ -211,19 +211,23 @@ recipientEl.textContent = recipientName || "Recipient";
 
 if(frailejonName && nativePlantName){
 
-    adoptionTypeEl.textContent = "Frailejón & Native Plant";
+    adoptionTypeEl.textContent =
+        frailejonName + " • " + nativePlantName;
 
 }else if(frailejonName){
 
-    adoptionTypeEl.textContent = "Frailejón";
+    adoptionTypeEl.textContent =
+        frailejonName;
 
 }else if(nativePlantName){
 
-    adoptionTypeEl.textContent = "Native Plant";
+    adoptionTypeEl.textContent =
+        nativePlantName;
 
 }else{
 
-    adoptionTypeEl.textContent = "Adoption";
+    adoptionTypeEl.textContent =
+        "";
 
 }
 
