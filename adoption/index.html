@@ -5,15 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Adoption Certificate</title>
 
-<!-- ===================== AGREGADO ===================== -->
-<!-- html2pdf.js (incluye jsPDF + html2canvas) para generar el PDF
-     directamente en el navegador, sin diálogo de impresión del sistema.
-     Esto da el MISMO resultado en Windows, Mac, Android e iPhone,
-     porque el render se hace por canvas y no depende del motor de
-     impresión de cada sistema operativo. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<!-- ======================================================= -->
-
 <style>
   html, body{
     margin:0;
@@ -51,13 +42,6 @@
     border-radius:999px;
     font-size:14px;
     font-weight:700;
-  }
-  /* AGREGADO: botón secundario de respaldo (imprimir), visualmente
-     discreto para no alterar la jerarquía del diseño original */
-  .btn-secondary{
-    background:#fff;
-    color:#111;
-    border:2px solid #111;
   }
 
   /* -------- TAMAÑO EN PANTALLA (responsive, igual que antes) -------- */
@@ -154,40 +138,15 @@
     .recipient{ font-size:1.4rem; }
     .plantName{ font-size:1.2rem; }
   }
-
-  /* ===================== AGREGADO ===================== */
-  /* Contenedor oculto, fuera de pantalla, usado SOLO para generar
-     el PDF con html2pdf. Tiene el tamaño físico exacto de una hoja
-     Carta horizontal (11in x 8.5in) y centra el certificado dentro
-     de ella con flexbox, dejando el mismo margen arriba/abajo y el
-     mismo margen izquierda/derecha (como una tarjeta enmarcada),
-     sin recortar ni deformar el diseño original. */
-  #pdf-render-zone{
-    position:absolute;
-    top:-99999px;
-    left:-99999px;
-    width:11in;
-    height:8.5in;
-    background:#ffffff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-  #pdf-render-zone .sheet{
-    width:min(11in, 8.5in * 1536 / 942);
-    height:min(8.5in, 11in * 942 / 1536);
-    box-shadow:none;
-  }
-  /* ======================================================= */
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <!-- CAMBIO: el botón principal ahora llama a generarPDF() en vez de window.print() -->
-  <button class="btn" onclick="generarPDF()">Download / Save PDF</button>
-  <!-- AGREGADO: respaldo, por si el usuario prefiere imprimir manualmente -->
-  <button class="btn btn-secondary" onclick="window.print()">Imprimir</button>
+  <!-- CAMBIO: un solo botón. window.print() ya funciona bien (confirmado)
+       y el propio diálogo de impresión del navegador incluye "Guardar
+       como PDF" como destino, así que no se necesita librería extra. -->
+  <button class="btn" onclick="window.print()">Download / Print Certificate</button>
 </div>
 
 <div class="sheet" id="sheet-visible">
@@ -197,12 +156,6 @@
     <div class="plantName" id="plantName"></div>
   </div>
 </div>
-
-<!-- ===================== AGREGADO ===================== -->
-<!-- Zona oculta donde se clona el certificado con tamaño físico fijo
-     antes de convertirlo a PDF. No es visible para el usuario. -->
-<div id="pdf-render-zone" aria-hidden="true"></div>
-<!-- ======================================================= -->
 
 <script>
   function qs(name){
@@ -232,69 +185,6 @@
     document.getElementById("plantName").textContent = nativePlantName;
   }
   // If neither applies, div stays empty and clean
-
-  /* ===================== AGREGADO ===================== */
-  /*
-    generarPDF():
-    1. Clona el nodo .sheet (ya con el texto del certificado insertado)
-       dentro de #pdf-render-zone, que tiene tamaño físico fijo
-       (11in x 8.5in = tamaño real de una hoja Carta horizontal).
-    2. Usa html2pdf.js (html2canvas + jsPDF) para "fotografiar" ese
-       clon en alta resolución y exportarlo como PDF con formato
-       Carta horizontal, sin márgenes.
-    3. Como el render es por canvas, el resultado es visualmente
-       idéntico sin importar el navegador o sistema operativo desde
-       el que se genere.
-  */
-  function generarPDF(){
-    const original = document.getElementById('sheet-visible');
-    const zone = document.getElementById('pdf-render-zone');
-
-    // Limpiar y clonar el certificado actual (con sus datos ya cargados)
-    zone.innerHTML = '';
-    const clone = original.cloneNode(true);
-    clone.id = 'sheet-pdf-clone';
-    zone.appendChild(clone);
-
-    const opciones = {
-      margin: 0,
-      filename: (recipientName ? recipientName.replace(/\s+/g,'_') + '_certificado' : 'certificado') + '.pdf',
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 3,            // alta resolución para impresión nítida
-        useCORS: true,       // permite cargar background.png correctamente
-        allowTaint: false,
-        backgroundColor: '#ffffff'
-      },
-      jsPDF: {
-        unit: 'in',
-        format: 'letter',
-        orientation: 'landscape'
-      }
-    };
-
-    // Esperamos a que la imagen de fondo esté completamente cargada
-    // antes de capturar, para evitar un PDF con el fondo en blanco.
-    const bgImg = clone.querySelector('.bg');
-    const render = () => {
-      // CAMBIO IMPORTANTE: se captura "zone" completa (11in x 8.5in,
-      // fondo blanco + certificado ya centrado por CSS) en vez de
-      // capturar solo "clone" (el certificado suelto). Así el
-      // centrado con margen simétrico queda grabado dentro de la
-      // imagen capturada, y el PDF resultante queda exactamente
-      // igual sin importar cómo html2pdf posicione internamente
-      // un fragmento más pequeño que la hoja.
-      html2pdf().set(opciones).from(zone).save();
-    };
-
-    if (bgImg.complete) {
-      render();
-    } else {
-      bgImg.onload = render;
-      bgImg.onerror = render; // genera igual aunque falle la imagen
-    }
-  }
-  /* ======================================================= */
 </script>
 </body>
 </html>
