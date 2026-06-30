@@ -22,7 +22,12 @@
     font-family:Arial, Helvetica, sans-serif;
   }
   body{
-    min-height:100vh;
+    /* CAMBIO: antes "min-height:100vh" dejaba una franja blanca grande
+       debajo del certificado en pantallas altas (como en móviles),
+       porque el body se estiraba a toda la altura visible aunque el
+       certificado fuera más corto. Ahora el body solo mide lo que
+       necesita su contenido. */
+    min-height:auto;
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -120,18 +125,26 @@
       background:#fff !important;
       margin:0;
       padding:0;
-      display:block;
+      /* CAMBIO: en vez de "display:block" estirando el .sheet a toda
+         la hoja (lo que obligaba a recortar la imagen con cover),
+         ahora centramos el certificado dentro de la hoja con flexbox.
+         Esto genera automáticamente el mismo margen arriba/abajo y
+         el mismo margen izquierda/derecha, sin recortar ni deformar
+         nada — se ve como una tarjeta centrada a propósito. */
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
     .topbar{ display:none !important; }
     .sheet{
-      /* CAMBIO: antes era width:100vw + height:auto (con aspect-ratio),
-         lo cual varía según el motor de render. Ahora se fija al
-         tamaño físico EXACTO de la hoja Carta horizontal, sin
-         depender de unidades de viewport (vw), que no son
-         consistentes entre Chrome/Edge/Safari/Firefox al imprimir. */
-      width:11in;
-      height:8.5in;
-      aspect-ratio: unset;
+      /* CAMBIO: en vez de width:auto/height:auto + aspect-ratio
+         (que Safari/iOS no siempre calcula bien dentro de un flex
+         container), se calcula explícitamente con min() el tamaño
+         máximo que cabe dentro de 11in x 8.5in conservando la
+         proporción real de la imagen (1536/942). Esto es 100%
+         predecible en Chrome, Edge, Safari y Firefox por igual. */
+      width:min(11in, 8.5in * 1536 / 942);
+      height:min(8.5in, 11in * 942 / 1536);
       box-shadow:none;
       margin:0;
     }
@@ -144,20 +157,25 @@
 
   /* ===================== AGREGADO ===================== */
   /* Contenedor oculto, fuera de pantalla, usado SOLO para generar
-     el PDF con html2pdf. Se renderiza con tamaño físico fijo
-     (11in x 8.5in) para que el resultado sea idéntico en cualquier
-     dispositivo, independientemente del tamaño de pantalla real. */
+     el PDF con html2pdf. Tiene el tamaño físico exacto de una hoja
+     Carta horizontal (11in x 8.5in) y centra el certificado dentro
+     de ella con flexbox, dejando el mismo margen arriba/abajo y el
+     mismo margen izquierda/derecha (como una tarjeta enmarcada),
+     sin recortar ni deformar el diseño original. */
   #pdf-render-zone{
     position:absolute;
     top:-99999px;
     left:-99999px;
     width:11in;
     height:8.5in;
+    background:#ffffff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
   #pdf-render-zone .sheet{
-    width:11in;
-    height:8.5in;
-    aspect-ratio:unset;
+    width:min(11in, 8.5in * 1536 / 942);
+    height:min(8.5in, 11in * 942 / 1536);
     box-shadow:none;
   }
   /* ======================================================= */
@@ -259,7 +277,14 @@
     // antes de capturar, para evitar un PDF con el fondo en blanco.
     const bgImg = clone.querySelector('.bg');
     const render = () => {
-      html2pdf().set(opciones).from(clone).save();
+      // CAMBIO IMPORTANTE: se captura "zone" completa (11in x 8.5in,
+      // fondo blanco + certificado ya centrado por CSS) en vez de
+      // capturar solo "clone" (el certificado suelto). Así el
+      // centrado con margen simétrico queda grabado dentro de la
+      // imagen capturada, y el PDF resultante queda exactamente
+      // igual sin importar cómo html2pdf posicione internamente
+      // un fragmento más pequeño que la hoja.
+      html2pdf().set(opciones).from(zone).save();
     };
 
     if (bgImg.complete) {
