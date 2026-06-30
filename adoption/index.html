@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Adoption Certificate</title>
+
+<!-- ===================== AGREGADO ===================== -->
+<!-- html2pdf.js (incluye jsPDF + html2canvas) para generar el PDF
+     directamente en el navegador, sin diálogo de impresión del sistema.
+     Esto da el MISMO resultado en Windows, Mac, Android e iPhone,
+     porque el render se hace por canvas y no depende del motor de
+     impresión de cada sistema operativo. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- ======================================================= -->
+
 <style>
   html, body{
     margin:0;
@@ -11,7 +21,6 @@
     background:#d9d9d9;
     font-family:Arial, Helvetica, sans-serif;
   }
-
   body{
     min-height:100vh;
     display:flex;
@@ -20,14 +29,13 @@
     justify-content:flex-start;
     padding:18px;
   }
-
   .topbar{
     width:min(1200px,100%);
     margin:0 auto 12px auto;
     display:flex;
     justify-content:flex-end;
+    gap:10px; /* AGREGADO: separación entre los 2 botones */
   }
-
   .btn{
     appearance:none;
     border:none;
@@ -39,7 +47,15 @@
     font-size:14px;
     font-weight:700;
   }
+  /* AGREGADO: botón secundario de respaldo (imprimir), visualmente
+     discreto para no alterar la jerarquía del diseño original */
+  .btn-secondary{
+    background:#fff;
+    color:#111;
+    border:2px solid #111;
+  }
 
+  /* -------- TAMAÑO EN PANTALLA (responsive, igual que antes) -------- */
   .sheet{
     position:relative;
     width:min(1200px,100%);
@@ -48,24 +64,21 @@
     overflow:hidden;
     background:#eef3f3;
   }
-
   .bg{
     position:absolute;
     inset:0;
     width:100%;
     height:100%;
-    object-fit:cover;
+    object-fit:cover; /* ya estaba: clave para encajar en Carta sin deformar */
     z-index:1;
     user-select:none;
     pointer-events:none;
   }
-
   .layer{
     position:absolute;
     inset:0;
     z-index:2;
   }
-
   .recipient{
     position:absolute;
     left:50%;
@@ -80,7 +93,6 @@
     font-family:Georgia, "Times New Roman", serif;
     font-weight:700;
   }
-
   .plantName{
     position:absolute;
     left:50%;
@@ -96,15 +108,15 @@
     font-weight:700;
   }
 
+  /* -------- IMPRESIÓN DE RESPALDO (con medidas físicas reales) -------- */
   @page{
     size: letter landscape;
     margin: 0;
   }
-
   @media print{
     html, body{
-      width:100%;
-      height:100%;
+      width:11in;
+      height:8.5in;
       background:#fff !important;
       margin:0;
       padding:0;
@@ -112,8 +124,14 @@
     }
     .topbar{ display:none !important; }
     .sheet{
-      width:100vw;
-      height:auto;
+      /* CAMBIO: antes era width:100vw + height:auto (con aspect-ratio),
+         lo cual varía según el motor de render. Ahora se fija al
+         tamaño físico EXACTO de la hoja Carta horizontal, sin
+         depender de unidades de viewport (vw), que no son
+         consistentes entre Chrome/Edge/Safari/Firefox al imprimir. */
+      width:11in;
+      height:8.5in;
+      aspect-ratio: unset;
       box-shadow:none;
       margin:0;
     }
@@ -123,36 +141,62 @@
     .recipient{ font-size:1.4rem; }
     .plantName{ font-size:1.2rem; }
   }
+
+  /* ===================== AGREGADO ===================== */
+  /* Contenedor oculto, fuera de pantalla, usado SOLO para generar
+     el PDF con html2pdf. Se renderiza con tamaño físico fijo
+     (11in x 8.5in) para que el resultado sea idéntico en cualquier
+     dispositivo, independientemente del tamaño de pantalla real. */
+  #pdf-render-zone{
+    position:absolute;
+    top:-99999px;
+    left:-99999px;
+    width:11in;
+    height:8.5in;
+  }
+  #pdf-render-zone .sheet{
+    width:11in;
+    height:8.5in;
+    aspect-ratio:unset;
+    box-shadow:none;
+  }
+  /* ======================================================= */
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <button class="btn" onclick="window.print()">Download / Save PDF</button>
+  <!-- CAMBIO: el botón principal ahora llama a generarPDF() en vez de window.print() -->
+  <button class="btn" onclick="generarPDF()">Download / Save PDF</button>
+  <!-- AGREGADO: respaldo, por si el usuario prefiere imprimir manualmente -->
+  <button class="btn btn-secondary" onclick="window.print()">Imprimir</button>
 </div>
 
-<div class="sheet">
+<div class="sheet" id="sheet-visible">
   <img class="bg" src="background.png" alt="Adoption Certificate">
-
   <div class="layer">
     <div class="recipient" id="recipient"></div>
     <div class="plantName" id="plantName"></div>
   </div>
 </div>
 
+<!-- ===================== AGREGADO ===================== -->
+<!-- Zona oculta donde se clona el certificado con tamaño físico fijo
+     antes de convertirlo a PDF. No es visible para el usuario. -->
+<div id="pdf-render-zone" aria-hidden="true"></div>
+<!-- ======================================================= -->
+
 <script>
   function qs(name){
     const params = new URLSearchParams(window.location.search);
     return params.get(name) || "";
   }
-
   function clean(value){
     const v = String(value || "").trim();
     if (!v) return "";
     if (v.includes("{{")) return "";
     return decodeURIComponent(v.replace(/\+/g, " "));
   }
-
   const recipientName   = clean(qs("nombre"));
   const frailejonName   = clean(qs("frailejon"));
   const nativePlantName = clean(qs("planta"));
@@ -170,7 +214,62 @@
     document.getElementById("plantName").textContent = nativePlantName;
   }
   // If neither applies, div stays empty and clean
-</script>
 
+  /* ===================== AGREGADO ===================== */
+  /*
+    generarPDF():
+    1. Clona el nodo .sheet (ya con el texto del certificado insertado)
+       dentro de #pdf-render-zone, que tiene tamaño físico fijo
+       (11in x 8.5in = tamaño real de una hoja Carta horizontal).
+    2. Usa html2pdf.js (html2canvas + jsPDF) para "fotografiar" ese
+       clon en alta resolución y exportarlo como PDF con formato
+       Carta horizontal, sin márgenes.
+    3. Como el render es por canvas, el resultado es visualmente
+       idéntico sin importar el navegador o sistema operativo desde
+       el que se genere.
+  */
+  function generarPDF(){
+    const original = document.getElementById('sheet-visible');
+    const zone = document.getElementById('pdf-render-zone');
+
+    // Limpiar y clonar el certificado actual (con sus datos ya cargados)
+    zone.innerHTML = '';
+    const clone = original.cloneNode(true);
+    clone.id = 'sheet-pdf-clone';
+    zone.appendChild(clone);
+
+    const opciones = {
+      margin: 0,
+      filename: (recipientName ? recipientName.replace(/\s+/g,'_') + '_certificado' : 'certificado') + '.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 3,            // alta resolución para impresión nítida
+        useCORS: true,       // permite cargar background.png correctamente
+        allowTaint: false,
+        backgroundColor: '#ffffff'
+      },
+      jsPDF: {
+        unit: 'in',
+        format: 'letter',
+        orientation: 'landscape'
+      }
+    };
+
+    // Esperamos a que la imagen de fondo esté completamente cargada
+    // antes de capturar, para evitar un PDF con el fondo en blanco.
+    const bgImg = clone.querySelector('.bg');
+    const render = () => {
+      html2pdf().set(opciones).from(clone).save();
+    };
+
+    if (bgImg.complete) {
+      render();
+    } else {
+      bgImg.onload = render;
+      bgImg.onerror = render; // genera igual aunque falle la imagen
+    }
+  }
+  /* ======================================================= */
+</script>
 </body>
 </html>
